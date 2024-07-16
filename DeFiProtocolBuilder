@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract DeFiProtocolBuilder is Ownable {
+    using SafeERC20 for IERC20;
+
+    // Struct to define a lending protocol
+    struct LendingProtocol {
+        string name;
+        address tokenAddress;
+        uint256 totalSupply;
+        uint256 totalBorrow;
+        uint256 interestRate;
+    }
+
+    LendingProtocol[] public lendingProtocols;
+    mapping(address => bool) public isProtocolDeployed;
+
+    // Events
+    event ProtocolDeployed(uint256 indexed protocolId, string name, address tokenAddress);
+
+    // Deploy a new lending protocol
+    function deployLendingProtocol(string memory name, address tokenAddress) external onlyOwner {
+        require(!isProtocolDeployed[tokenAddress], "Protocol already deployed");
+
+        LendingProtocol memory newProtocol = LendingProtocol({
+            name: name,
+            tokenAddress: tokenAddress,
+            totalSupply: 0,
+            totalBorrow: 0,
+            interestRate: 5 // Example: Initial interest rate set to 5%
+        });
+
+        lendingProtocols.push(newProtocol);
+        isProtocolDeployed[tokenAddress] = true;
+
+        emit ProtocolDeployed(lendingProtocols.length - 1, name, tokenAddress);
+    }
+
+    // Get total supply and total borrow of a lending protocol
+    function getProtocolStats(uint256 protocolId) external view returns (uint256 totalSupply, uint256 totalBorrow, uint256 interestRate) {
+        require(protocolId < lendingProtocols.length, "Invalid protocol ID");
+
+        LendingProtocol storage protocol = lendingProtocols[protocolId];
+        return (protocol.totalSupply, protocol.totalBorrow, protocol.interestRate);
+    }
+
+    // Deposit tokens into a lending protocol
+    function deposit(uint256 protocolId, uint256 amount) external {
+        require(protocolId < lendingProtocols.length, "Invalid protocol ID");
+
+        LendingProtocol storage protocol = lendingProtocols[protocolId];
+        IERC20(protocol.tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+        protocol.totalSupply += amount;
+    }
+
+    // Borrow tokens from a lending protocol
+    function borrow(uint256 protocolId, uint256 amount) external {
+        require(protocolId < lendingProtocols.length, "Invalid protocol ID");
+
+        LendingProtocol storage protocol = lendingProtocols[protocolId];
+        require(amount <= protocol.totalSupply - protocol.totalBorrow, "Insufficient liquidity");
+
+        protocol.totalBorrow += amount;
+        IERC20(protocol.tokenAddress).safeTransfer(msg.sender, amount);
+    }
+
+    // Repay borrowed tokens to a lending protocol
+    function repay(uint256 protocolId, uint256 amount) external {
+        require(protocolId < lendingProtocols.length, "Invalid protocol ID");
+
+        LendingProtocol storage protocol = lendingProtocols[protocolId];
+        IERC20(protocol.tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+        protocol.totalBorrow -= amount;
+    }
+}
